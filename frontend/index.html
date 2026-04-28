@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Analyst Bot 🤖</title>
+  <meta name="description" content="AI-powered data analyst bot — crawl, analyze, visualize any website data" />
+  <link rel="stylesheet" href="/assets/css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay" style="display:none">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">Đang xử lý...</div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- App -->
+<div class="app-wrapper">
+
+  <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🤖</div>
+      <div>
+        <h1>Analyst Bot</h1>
+        <span>Data Intelligence</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">Lịch sử Crawl</div>
+    <div class="session-list" id="sessionList">
+      <div style="padding:12px;color:var(--text3);font-size:0.8rem;">Chưa có session nào</div>
+    </div>
+
+    <div class="sidebar-bottom">
+      <div class="sidebar-link" onclick="openDocs()">📖 API Docs</div>
+      <div class="sidebar-link" onclick="exportCSV()">📤 Xuất CSV</div>
+      <div class="sidebar-link" onclick="clearAll()">🗑️ Xóa dữ liệu</div>
+    </div>
+  </aside>
+
+  <!-- ── Main ──────────────────────────────────────────────────────────── -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="topbar-title">Dashboard <small id="currentSite"></small></div>
+      <div class="crawl-bar">
+        <input
+          id="urlInput"
+          class="crawl-input"
+          type="url"
+          placeholder="🔗 Nhập URL cần crawl... (vd: books.toscrape.com)"
+        />
+        <button class="btn btn-primary" id="crawlBtn" onclick="doCrawl()">
+          🕷️ Crawl
+        </button>
+        <button class="btn btn-secondary" onclick="doAnalyze()">📊 Analyze</button>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content" id="mainContent">
+
+      <!-- Empty state (default) -->
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">🔍</div>
+        <h3>Nhập URL để bắt đầu</h3>
+        <p>Bot sẽ tự động crawl, làm sạch và phân tích dữ liệu từ bất kỳ trang web nào.</p>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="setDemo('http://books.toscrape.com')">
+            📚 Demo: books.toscrape.com
+          </button>
+          <button class="btn btn-secondary" onclick="setDemo('https://www.premierleague.com')">
+            ⚽ Demo: Premier League Stats
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="kpi-grid" id="kpiGrid" style="display:none">
+        <div class="kpi-card accent1">
+          <div class="kpi-icon">📦</div>
+          <div class="kpi-value" id="kpiTotal">—</div>
+          <div class="kpi-label">Tổng số bản ghi</div>
+        </div>
+        <div class="kpi-card accent2">
+          <div class="kpi-icon">💰</div>
+          <div class="kpi-value" id="kpiAvg">—</div>
+          <div class="kpi-label">Giá trị trung bình</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">📈</div>
+          <div class="kpi-value" id="kpiMax">—</div>
+          <div class="kpi-label">Giá cao nhất</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">📉</div>
+          <div class="kpi-value" id="kpiMin">—</div>
+          <div class="kpi-label">Giá thấp nhất</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">🗂️</div>
+          <div class="kpi-value" id="kpiCats">—</div>
+          <div class="kpi-label">Danh mục</div>
+        </div>
+        <div class="kpi-card accent2">
+          <div class="kpi-icon">⭐</div>
+          <div class="kpi-value" id="kpiRating">—</div>
+          <div class="kpi-label">Rating TB</div>
+        </div>
+      </div>
+
+      <!-- Insights -->
+      <div id="insightsSection" style="display:none">
+        <div class="section-title">💡 Auto Insights <span class="pill" id="insightCount">0</span></div>
+        <div class="insights-panel" id="insightsPanel"></div>
+      </div>
+
+      <div class="charts-grid" id="chartsGrid" style="display:none">
+        <div class="chart-card">
+          <div class="chart-title">📊 Số lượng theo Danh mục</div>
+          <canvas id="chartBar"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">🥧 Phân phối Giá</div>
+          <canvas id="chartPie"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">📏 Giá TB theo Danh mục</div>
+          <canvas id="chartHBar"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">🔵 Giá vs Điểm / Rating</div>
+          <canvas id="chartScatter"></canvas>
+        </div>
+        <div class="chart-card" id="lineChartCard" style="display:none">
+          <div class="chart-title">📈 Xu hướng Giá TB</div>
+          <canvas id="chartLine"></canvas>
+        </div>
+      </div>
+
+      <!-- Data Table -->
+      <div class="table-card" id="tableCard" style="display:none">
+        <div class="table-header">
+          <div class="section-title" style="margin:0">📋 Dữ liệu <span class="pill" id="tableCount">0</span></div>
+          <input class="table-search" id="tableSearch" type="text" placeholder="🔍 Tìm kiếm..." oninput="filterTable()" />
+          <button class="btn btn-sm btn-secondary" onclick="exportCSV()">⬇️ CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table id="dataTable">
+            <thead>
+              <tr>
+                <th onclick="sortTable('name')">#  Tên / Tiêu đề ↕</th>
+                <th onclick="sortTable('price')">Giá trị ↕</th>
+                <th>Danh mục</th>
+                <th onclick="sortTable('rating')">Rating ↕</th>
+                <th>URL</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app-wrapper -->
+
+<!-- ── Chat Widget ──────────────────────────────────────────────────────── -->
+<button class="chat-fab" id="chatFab" onclick="toggleChat()" title="Mở chat bot">💬</button>
+
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-head">
+    <div class="bot-avatar">🤖</div>
+    <div class="bot-info">
+      <div class="bot-name">Analyst Bot</div>
+      <div class="bot-status">● Online</div>
+    </div>
+    <button class="close-chat" onclick="toggleChat()">✕</button>
+  </div>
+
+  <div class="chat-messages" id="chatMessages">
+    <div class="msg bot">
+      <div class="msg-bubble">
+        👋 Xin chào! Tôi là <b>Analyst Bot</b>.<br/>
+        Nhập URL để crawl hoặc hỏi tôi về dữ liệu.<br/>
+        Gõ <b>help</b> để xem hướng dẫn.
+      </div>
+    </div>
+  </div>
+
+  <div class="quick-actions">
+    <button class="quick-btn" onclick="sendQuick('ghi bàn nhiều nhất')">⚽ Ghi bàn</button>
+    <button class="quick-btn" onclick="sendQuick('kiến tạo nhiều nhất')">🎯 Kiến tạo</button>
+    <button class="quick-btn" onclick="sendQuick('top 10 điểm FPL')">🏆 Top Điểm</button>
+    <button class="quick-btn" onclick="sendQuick('help')">❓ Help</button>
+  </div>
+
+  <div class="chat-input-row">
+    <input
+      id="chatInput"
+      class="chat-input"
+      type="text"
+      placeholder="Hỏi về dữ liệu..."
+      onkeydown="if(event.key==='Enter') sendChat()"
+    />
+    <button class="send-btn" onclick="sendChat()">➤</button>
+  </div>
+</div>
+
+<script src="/assets/js/api.js?v=1.1"></script>
+<script src="/assets/js/dashboard.js?v=1.5"></script>
+<script src="/assets/js/chat.js?v=1.2"></script>
+</body>
+</html>

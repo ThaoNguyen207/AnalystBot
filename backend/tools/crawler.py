@@ -81,6 +81,10 @@ class SmartCrawler:
         domain = urlparse(url).netloc.lower().replace("www.", "")
         config = SITE_CONFIGS.get(domain, {})
         
+        # Specialized strategies (Fast & Reliable)
+        if "premierleague" in domain or "fantasy.premierleague" in domain:
+            return self._crawl_premier_league(url)
+        
         items = []
         strategy = "auto"
 

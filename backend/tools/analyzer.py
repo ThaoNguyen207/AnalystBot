@@ -28,21 +28,30 @@ def analyze(df: pd.DataFrame, prev_df: Optional[pd.DataFrame] = None) -> Dict:
 
 # ─── Sub-functions ────────────────────────────────────────────────────────────
 
+def _get_unit(df: pd.DataFrame, priced: pd.DataFrame) -> str:
+    """Helper to detect currency symbol from the dataset."""
+    unit = "đ"
+    # 1. Check explicit unit column
+    if "unit" in df.columns and not df["unit"].dropna().empty:
+        return str(df["unit"].mode().iloc[0])
+    
+    # 2. Scan price_raw for symbols
+    if not priced.empty and "price_raw" in priced.columns:
+        raw_text = " ".join(priced["price_raw"].astype(str).unique()[:15])
+        if "£" in raw_text or "Â£" in raw_text: return "£"
+        if "$" in raw_text: return "$"
+        if "€" in raw_text: return "€"
+        if "đ" in raw_text or "VND" in raw_text or "VNĐ" in raw_text: return "đ"
+    return unit
+
 def _summary(df: pd.DataFrame, priced: pd.DataFrame) -> Dict:
+    """Full statistical analysis + auto-generated insights."""
+    if df.empty:
+        return {"error": "Không có dữ liệu"}
+
+    unit = _get_unit(df, priced)
     cats = df["category"].nunique()
     
-    # Detect unit - try 'unit' column first, then fallback to parsing price_raw
-    unit = "đ"
-    if "unit" in df.columns and not df["unit"].dropna().empty:
-        unit = df["unit"].mode().iloc[0]
-    elif not priced.empty and "price_raw" in priced.columns:
-        # Fallback: scan price_raw for symbols
-        raw_text = " ".join(priced["price_raw"].astype(str).unique()[:10])
-        if "£" in raw_text or "Â£" in raw_text: unit = "£"
-        elif "$" in raw_text: unit = "$"
-        elif "€" in raw_text: unit = "€"
-        elif "đ" in raw_text or "VND" in raw_text: unit = "đ"
-        
     return {
         "total_items": len(df),
         "items_with_price": len(priced),
@@ -115,9 +124,7 @@ def _insights(df: pd.DataFrame, priced: pd.DataFrame, prev_df: Optional[pd.DataF
     insights = []
     
     # Detect unit for insights
-    unit = "đ"
-    if "unit" in df.columns and not df["unit"].dropna().empty:
-        unit = df["unit"].mode().iloc[0]
+    unit = _get_unit(df, priced)
 
     if priced.empty:
         insights.append("⚠️ Dữ liệu không chứa thông tin về giá/giá trị số.")

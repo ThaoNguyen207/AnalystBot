@@ -27,37 +27,93 @@ PRICE_RE = re.compile(
 RATING_RE = re.compile(r"(\d(?:[.,]\d)?)\s*(?:/\s*5|sao|stars?|\*)", re.IGNORECASE)
 
 
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+import time
+
+# ─── Site Specific Configurations (Point 2) ──────────────────────────────────
+SITE_CONFIGS = {
+    "shopee.vn": {
+        "item_selector": ".shopee-search-item-result__item",
+        "name": ".ie3A_2",
+        "price": ".vioxXd",
+        "use_selenium": True
+    },
+    "lazada.vn": {
+        "item_selector": ".Bm3ON",
+        "name": ".RfADt",
+        "price": ".ooY5H",
+        "use_selenium": True
+    },
+    "books.toscrape.com": {
+        "item_selector": "article.product_pod",
+        "name": "h3 a",
+        "price": ".price_color",
+        "rating": ".star-rating",
+        "use_selenium": False
+    }
+}
+
 class SmartCrawler:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update(HEADERS)
+        self._driver = None
+
+    def _get_driver(self):
+        """Initialize lazy-loaded headless Chrome."""
+        if self._driver is None:
+            chrome_options = Options()
+            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument(f"user-agent={HEADERS['User-Agent']}")
+            
+            service = Service(ChromeDriverManager().install())
+            self._driver = webdriver.Chrome(service=service, options=chrome_options)
+        return self._driver
 
     def crawl(self, url: str) -> Dict:
-        """Main entry — auto-detect strategy and extract items from any URL."""
-        try:
-            resp = self.session.get(url, timeout=15, allow_redirects=True)
-            resp.raise_for_status()
-            html = resp.text
-        except requests.RequestException as e:
-            return {"success": False, "error": str(e), "items": [], "total": 0}
-
-        soup = BeautifulSoup(html, "lxml")
-        for tag in soup(["script", "style", "noscript", "iframe"]):
-            tag.decompose()
-
+        """Main entry — handles both Static (BS4) and Dynamic (Selenium) crawling."""
         site_name = self._site_name(url)
-        domain = urlparse(url).netloc.lower()
+        domain = urlparse(url).netloc.lower().replace("www.", "")
+        config = SITE_CONFIGS.get(domain, {})
+        
+        items = []
+        strategy = "auto"
 
-        # Specialized strategies first
-        if "toscrape" in domain or "books" in domain:
-            items = self._crawl_books(soup, url)
-            strategy = "books_toscrape"
-        elif "premierleague" in domain or "fantasy.premierleague" in domain:
-            return self._crawl_premier_league(url)
-        elif "shopee" in domain:
-            return self._crawl_shopee(url)
+        # 1. Check if we should use Selenium immediately
+        if config.get("use_selenium"):
+            items = self._crawl_with_selenium(url, config)
+            strategy = f"selenium_{domain}"
         else:
-            items, strategy = self._auto_strategy(soup, url)
+            # 2. Try Standard Requests + BS4
+            try:
+                resp = self.session.get(url, timeout=15, allow_redirects=True)
+                resp.raise_for_status()
+                html = resp.text
+                soup = BeautifulSoup(html, "lxml")
+                
+                if config:
+                    items = self._extract_with_config(soup, url, config)
+                    strategy = f"config_{domain}"
+                else:
+                    items, strategy = self._auto_strategy(soup, url)
+                
+                # 3. If BS4 fails to find items but URL seems valid, try fallback to Selenium
+                if not items:
+                    print(f"Fallback to Selenium for: {url}")
+                    items = self._crawl_with_selenium(url, config)
+                    strategy = f"selenium_fallback"
+
+            except requests.RequestException as e:
+                # 4. Final attempt with Selenium if request blocked
+                items = self._crawl_with_selenium(url, config)
+                strategy = "selenium_blocked_recovery"
+                if not items:
+                    return {"success": False, "error": str(e), "items": [], "total": 0}
 
         items = [i for i in items if i.get("name") or i.get("price", 0) > 0]
 
@@ -69,6 +125,59 @@ class SmartCrawler:
             "total": len(items),
             "items": items[:300],
         }
+
+    def _crawl_with_selenium(self, url: str, config: Dict) -> List[Dict]:
+        """Load page in real browser, wait for JS, and extract."""
+        try:
+            driver = self._get_driver()
+            driver.get(url)
+            time.sleep(3) # Wait for JS
+            
+            # Scroll a bit to trigger lazy loading
+            driver.execute_script("window.scrollTo(0, 500);")
+            time.sleep(1)
+            
+            html = driver.page_source
+            soup = BeautifulSoup(html, "lxml")
+            
+            if config:
+                return self._extract_with_config(soup, url, config)
+            else:
+                items, _ = self._auto_strategy(soup, url)
+                return items
+        except Exception as e:
+            print(f"Selenium Error: {e}")
+            return []
+
+    def _extract_with_config(self, soup, base_url: str, config: Dict) -> List[Dict]:
+        """Extract items using site-specific CSS selectors."""
+        items = []
+        for el in soup.select(config["item_selector"]):
+            try:
+                name_el = el.select_one(config["name"])
+                name = name_el.get_text(strip=True) if name_el else "Unknown"
+                
+                price_el = el.select_one(config["price"])
+                price_raw = price_el.get_text(strip=True) if price_el else ""
+                price = self._parse_price(price_raw)
+                
+                # Bonus: check for links and images
+                a_tag = el.find("a", href=True)
+                img_tag = el.find("img", src=True)
+                
+                items.append({
+                    "name": name,
+                    "price": price,
+                    "price_raw": price_raw,
+                    "category": config.get("category", "General"),
+                    "rating": 0.0,
+                    "url": urljoin(base_url, a_tag['href']) if a_tag else "",
+                    "image_url": urljoin(base_url, img_tag['src']) if img_tag else "",
+                    "extra_data": "{}"
+                })
+            except:
+                continue
+        return items
 
     # ─── Strategies ───────────────────────────────────────────────────────────
 

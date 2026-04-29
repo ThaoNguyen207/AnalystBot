@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 import uvicorn
 
 from models.database import create_tables
-from routers import crawl, analyze, chat, data
+from routers import crawl, analyze, chat, data, data_upload
 
 # ─── App ─────────────────────────────────────────────────────────────────────
 
@@ -37,6 +37,7 @@ app.include_router(crawl.router,   prefix="/api/crawl",   tags=["🕷️ Crawl"]
 app.include_router(analyze.router, prefix="/api/analyze", tags=["📊 Analyze"])
 app.include_router(chat.router,    prefix="/api/chat",    tags=["💬 Chat"])
 app.include_router(data.router,    prefix="/api/data",    tags=["📦 Data"])
+app.include_router(data_upload.router, prefix="/api/upload", tags=["📤 Upload"])
 
 # ─── Static Frontend ─────────────────────────────────────────────────────────
 

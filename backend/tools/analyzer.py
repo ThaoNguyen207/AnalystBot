@@ -126,38 +126,49 @@ def _insights(df: pd.DataFrame, priced: pd.DataFrame, prev_df: Optional[pd.DataF
     avg = priced["price"].mean()
     mx  = priced["price"].max()
     mn  = priced["price"].min()
+    total = len(df)
     cats = df["category"].nunique()
 
-    insights.append(f"📊 Tổng cộng {len(df)} bản ghi thuộc {cats} nhóm/danh mục.")
-    insights.append(f"💰 Giá trị trung bình: {avg:,.2f} {unit} | Thấp nhất: {mn:,.2f} {unit} | Cao nhất: {mx:,.2f} {unit}")
+    # 1. Tổng quan cấu trúc
+    insights.append(f"📊 Bộ dữ liệu có {total} bản ghi thuộc {cats} nhóm ngành/danh mục.")
+    
+    # 2. Phân tích giá trị
+    insights.append(f"💰 Trung bình: {avg:,.0f}{unit} | Thấp nhất: {mn:,.0f}{unit} | Cao nhất: {mx:,.0f}{unit}")
 
-    # Category with highest avg price
-    cat_avg = df[df["price"] > 0].groupby("category")["price"].mean()
-    if not cat_avg.empty:
-        best_cat = cat_avg.idxmax()
-        insights.append(f"🔝 Nhóm có giá trị cao nhất: '{best_cat}' (TB {cat_avg.max():,.2f} {unit})")
+    # 3. Nồng độ dữ liệu (Category dominance)
+    cat_counts = df["category"].value_counts()
+    if not cat_counts.empty:
+        top_cat = cat_counts.index[0]
+        pct = (cat_counts.iloc[0] / total) * 100
+        insights.append(f"📦 Nhóm '{top_cat}' chiếm ưu thế với {pct:.1f}% tổng lượng dữ liệu.")
 
-    # Rating insight
+    # 4. Nhóm đắt đỏ nhất
+    cat_avg = priced.groupby("category")["price"].mean()
+    if len(cat_avg) > 1:
+        most_expensive_cat = cat_avg.idxmax()
+        insights.append(f"🔝 Nhóm '{most_expensive_cat}' có giá trị trung bình cao nhất ({cat_avg.max():,.0f}{unit}).")
+
+    # 5. Phân tích chất lượng (Rating)
     rated = df[df["rating"] > 0]
     if not rated.empty:
         avg_rat = rated["rating"].mean()
-        insights.append(f"⭐ Đánh giá/Rating trung bình: {avg_rat:.2f}/5 ({len(rated)} mục có đánh giá)")
+        insights.append(f"⭐ Đánh giá trung bình: {avg_rat:.2f}/5 stars.")
 
-    # Outlier warning
+    # 6. Cảnh báo bất thường (Outliers)
     q1, q3 = priced["price"].quantile(0.25), priced["price"].quantile(0.75)
     iqr = q3 - q1
     n_outliers = int(((priced["price"] < q1 - 1.5 * iqr) | (priced["price"] > q3 + 1.5 * iqr)).sum())
-    if n_outliers:
-        insights.append(f"⚠️ Phát hiện {n_outliers} bản ghi có giá trị bất thường (outlier).")
+    if n_outliers > 0:
+        insights.append(f"⚠️ Phát hiện {n_outliers} bản ghi có giá trị chênh lệch lớn so với phần còn lại.")
 
-    # Compare with previous session
+    # 7. So sánh lịch sử (Trend)
     if prev_df is not None and not prev_df.empty:
         prev_priced = prev_df[prev_df["price"] > 0]
         if not prev_priced.empty:
             prev_avg = prev_priced["price"].mean()
             change = (avg - prev_avg) / prev_avg * 100
-            arrow = "📈 tăng" if change > 0 else "📉 giảm"
-            insights.append(f"🔄 Giá TB {arrow} {abs(change):.1f}% so với lần crawl trước.")
+            trend = "📈 TĂNG" if change > 0 else "📉 GIẢM"
+            insights.append(f"🔄 Xu hướng: Giá trung bình {trend} {abs(change):.1f}% so với phiên trước đó.")
 
     return insights
 

@@ -386,12 +386,23 @@ async function loadProducts() {
   }
 }
 
+function removeAccents(str) {
+  return str.normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/g, 'd').replace(/Đ/g, 'D');
+}
+
 function filterTable() {
-  const q = document.getElementById('tableSearch').value.toLowerCase();
-  filteredProducts = allProducts.filter(p =>
-    (p.name || '').toLowerCase().includes(q) ||
-    (p.category || '').toLowerCase().includes(q)
-  );
+  const q = removeAccents(document.getElementById('tableSearch').value.toLowerCase());
+  
+  filteredProducts = allProducts.filter(p => {
+    const name = removeAccents((p.name || '').toLowerCase());
+    const cat = removeAccents((p.category || '').toLowerCase());
+    const extra = removeAccents((p.extra_data || '').toLowerCase());
+    
+    return name.includes(q) || cat.includes(q) || extra.includes(q);
+  });
+  
   currentPage = 1;
   renderTable();
 }

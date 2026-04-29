@@ -10,38 +10,51 @@ class LLMProvider:
     """Professional Multi-Provider AI Hub: Gemini, OpenAI, Groq."""
     
     def __init__(self):
+        # Ưu tiên lấy từ môi trường hệ thống (Render) trước
         self.gemini_key = os.getenv("GEMINI_API_KEY")
         self.openai_key = os.getenv("OPENAI_API_KEY")
         self.groq_key = os.getenv("GROQ_API_KEY")
+        
+        # Log nhẹ để debug trên Render (ẩn Key đi)
+        print(f"DEBUG: Gemini Key found: {bool(self.gemini_key)}")
+        print(f"DEBUG: OpenAI Key found: {bool(self.openai_key)}")
+        print(f"DEBUG: Groq Key found: {bool(self.groq_key)}")
+        
         self.client = httpx.AsyncClient(timeout=30)
 
     async def ask(self, prompt: str, system_prompt: str = "", provider: str = "auto") -> str:
         # 1. Manual Choice: Gemini
         if provider == "gemini":
-            if not self.gemini_key: return "❌ Lỗi: Bạn chưa nhập GEMINI_API_KEY vào file .env"
+            if not self.gemini_key: return "❌ Lỗi: Bạn chưa nhập GEMINI_API_KEY trên Render hoặc .env"
             return await self._call_gemini(prompt, system_prompt)
             
         # 2. Manual Choice: OpenAI
         if provider == "openai":
-            if not self.openai_key: return "❌ Lỗi: Bạn chưa nhập OPENAI_API_KEY vào file .env"
+            if not self.openai_key: return "❌ Lỗi: Bạn chưa nhập OPENAI_API_KEY trên Render hoặc .env"
             return await self._call_openai(prompt, system_prompt)
         
         # 3. Manual Choice: Groq
         if provider == "groq":
-            if not self.groq_key: return "❌ Lỗi: Bạn chưa nhập GROQ_API_KEY vào file .env"
+            if not self.groq_key: return "❌ Lỗi: Bạn chưa nhập GROQ_API_KEY trên Render hoặc .env"
             return await self._call_groq(prompt, system_prompt)
 
-        # 4. Auto Mode (Smart Selection)
+        # 4. Auto Mode (Smart Selection) - Nới lỏng kiểm tra để dễ nhận Key hơn
         providers_to_try = []
-        if self.groq_key and "gsk_" in self.groq_key: providers_to_try.append(("groq", self._call_groq))
-        if self.gemini_key and "AIza" in self.gemini_key: providers_to_try.append(("gemini", self._call_gemini))
-        if self.openai_key and "sk-" in self.openai_key: providers_to_try.append(("openai", self._call_openai))
+        if self.groq_key and len(self.groq_key) > 5: 
+            providers_to_try.append(("groq", self._call_groq))
+        if self.gemini_key and len(self.gemini_key) > 5: 
+            providers_to_try.append(("gemini", self._call_gemini))
+        if self.openai_key and len(self.openai_key) > 5: 
+            providers_to_try.append(("openai", self._call_openai))
         
         last_error = ""
         for name, func in providers_to_try:
-            res = await func(prompt, system_prompt)
-            if "❌" not in res: return res
-            last_error = res
+            try:
+                res = await func(prompt, system_prompt)
+                if "❌" not in res: return res
+                last_error = res
+            except Exception as e:
+                last_error = f"❌ Lỗi kết nối {name}: {str(e)}"
 
         # 5. Last resort fallback
         if last_error: return last_error

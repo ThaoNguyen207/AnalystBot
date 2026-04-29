@@ -77,13 +77,16 @@ class SmartCrawler:
 
     def crawl(self, url: str) -> Dict:
         """Main entry — handles both Static (BS4) and Dynamic (Selenium) crawling."""
+        url = url.strip() # Làm sạch URL
         site_name = self._site_name(url)
-        domain = urlparse(url).netloc.lower().replace("www.", "")
-        config = SITE_CONFIGS.get(domain, {})
+        domain = urlparse(url).netloc.lower()
         
-        # Specialized strategies (Fast & Reliable)
-        if "premierleague" in domain or "fantasy.premierleague" in domain:
+        # Specialized strategies (Fast & Reliable) - Kiểm tra ưu tiên
+        if "premierleague" in domain:
             return self._crawl_premier_league(url)
+        
+        domain_clean = domain.replace("www.", "")
+        config = SITE_CONFIGS.get(domain_clean, {})
         
         items = []
         strategy = "auto"

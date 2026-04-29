@@ -8,6 +8,7 @@ const PAGE_SIZE = 20;
 let sortKey = 'price';
 let sortAsc = false;
 let charts = {};
+let currentUnit = "đ";
 
 // ── Chart colour palette ──────────────────────────────────────────────────
 const PALETTE = [
@@ -175,7 +176,7 @@ function buildHBar(cd) {
         legend: { display: false },
         tooltip: { ...TOOLTIP, callbacks: {
           title: (items) => cd.labels[items[0].dataIndex],
-          label:  (item) => ` Giá TB: ${fmtTick(item.raw)}`,
+          label:  (item) => ` Giá TB: ${fmtPrice(item.raw)}`,
         }},
       },
       scales: {
@@ -212,7 +213,7 @@ function buildScatter(pts) {
       plugins: {
         legend: { display: false },
         tooltip: { ...TOOLTIP, callbacks: {
-          label: (item) => ` Giá: ${fmtTick(item.parsed.x)}  |  Điểm/Rating: ${item.parsed.y}`,
+          label: (item) => ` Giá: ${fmtPrice(item.parsed.x)}  |  Điểm/Rating: ${item.parsed.y}`,
         }},
       },
       scales: {
@@ -252,7 +253,7 @@ function buildLine(cd) {
         legend: { display: false },
         tooltip: { ...TOOLTIP, callbacks: {
           title: (items) => cd.labels[items[0].dataIndex],
-          label:  (item) => ` Giá TB: ${fmtTick(item.raw)}`,
+          label:  (item) => ` Giá TB: ${fmtPrice(item.raw)}`,
         }},
       },
       scales: {
@@ -312,6 +313,7 @@ async function doAnalyze() {
 
 // ── KPI Cards ─────────────────────────────────────────────────────────────
 function renderKPI(s) {
+  currentUnit = s.unit || "đ";
   document.getElementById('kpiTotal').textContent  = s.total_items.toLocaleString();
   document.getElementById('kpiAvg').textContent    = fmtPrice(s.avg_price);
   document.getElementById('kpiMax').textContent    = fmtPrice(s.max_price);
@@ -484,9 +486,22 @@ function destroyChart(id) {
 
 function fmtPrice(v) {
   if (v === undefined || v === null || isNaN(v)) return '—';
-  const site = document.getElementById('currentSite').textContent.toLowerCase();
-  if (site.includes('premier')) return `£${v}M`;
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v);
+  
+  // Format with the detected unit
+  if (currentUnit === "đ" || currentUnit === "VND") {
+      return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v).replace("₫", "đ");
+  }
+  
+  // For other currencies (£, $, etc.)
+  try {
+      const symbols = { "£": "GBP", "$": "USD", "€": "EUR" };
+      const curCode = symbols[currentUnit] || "USD";
+      if (symbols[currentUnit]) {
+          return new Intl.NumberFormat('en-GB', { style: 'currency', currency: curCode }).format(v);
+      }
+  } catch(e) {}
+  
+  return `${currentUnit}${v.toLocaleString()}`;
 }
 
 function stars(r) {
@@ -517,4 +532,3 @@ function hideLoading() {
   const el = document.getElementById('loadingOverlay');
   if (el) el.style.display = 'none';
 }
-

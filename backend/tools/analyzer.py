@@ -30,10 +30,24 @@ def analyze(df: pd.DataFrame, prev_df: Optional[pd.DataFrame] = None) -> Dict:
 
 def _summary(df: pd.DataFrame, priced: pd.DataFrame) -> Dict:
     cats = df["category"].nunique()
+    
+    # Detect unit - try 'unit' column first, then fallback to parsing price_raw
+    unit = "đ"
+    if "unit" in df.columns and not df["unit"].dropna().empty:
+        unit = df["unit"].mode().iloc[0]
+    elif not priced.empty and "price_raw" in priced.columns:
+        # Fallback: scan price_raw for symbols
+        raw_text = " ".join(priced["price_raw"].astype(str).unique()[:10])
+        if "£" in raw_text or "Â£" in raw_text: unit = "£"
+        elif "$" in raw_text: unit = "$"
+        elif "€" in raw_text: unit = "€"
+        elif "đ" in raw_text or "VND" in raw_text: unit = "đ"
+        
     return {
         "total_items": len(df),
         "items_with_price": len(priced),
         "categories": cats,
+        "unit": unit,
         "avg_price": round(float(priced["price"].mean()), 2) if not priced.empty else 0,
         "median_price": round(float(priced["price"].median()), 2) if not priced.empty else 0,
         "min_price": round(float(priced["price"].min()), 2) if not priced.empty else 0,
@@ -99,6 +113,11 @@ def _outliers(priced: pd.DataFrame) -> List[Dict]:
 
 def _insights(df: pd.DataFrame, priced: pd.DataFrame, prev_df: Optional[pd.DataFrame]) -> List[str]:
     insights = []
+    
+    # Detect unit for insights
+    unit = "đ"
+    if "unit" in df.columns and not df["unit"].dropna().empty:
+        unit = df["unit"].mode().iloc[0]
 
     if priced.empty:
         insights.append("⚠️ Dữ liệu không chứa thông tin về giá/giá trị số.")
@@ -110,13 +129,13 @@ def _insights(df: pd.DataFrame, priced: pd.DataFrame, prev_df: Optional[pd.DataF
     cats = df["category"].nunique()
 
     insights.append(f"📊 Tổng cộng {len(df)} bản ghi thuộc {cats} nhóm/danh mục.")
-    insights.append(f"💰 Giá trị trung bình: {avg:,.2f} | Thấp nhất: {mn:,.2f} | Cao nhất: {mx:,.2f}")
+    insights.append(f"💰 Giá trị trung bình: {avg:,.2f} {unit} | Thấp nhất: {mn:,.2f} {unit} | Cao nhất: {mx:,.2f} {unit}")
 
     # Category with highest avg price
     cat_avg = df[df["price"] > 0].groupby("category")["price"].mean()
     if not cat_avg.empty:
         best_cat = cat_avg.idxmax()
-        insights.append(f"🔝 Nhóm có giá trị cao nhất: '{best_cat}' (TB {cat_avg.max():,.2f})")
+        insights.append(f"🔝 Nhóm có giá trị cao nhất: '{best_cat}' (TB {cat_avg.max():,.2f} {unit})")
 
     # Rating insight
     rated = df[df["rating"] > 0]

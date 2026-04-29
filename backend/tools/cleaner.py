@@ -21,6 +21,16 @@ def clean_products(raw_items: List[Dict]) -> List[Dict]:
     # ── Price ─────────────────────────────────────────────────────────────────
     df["price"] = pd.to_numeric(df["price"], errors="coerce").fillna(0.0)
     df["price_raw"] = df["price_raw"].fillna("").astype(str).str.strip()
+    # Fix potential encoding issues (common with GBP symbol in UTF-8)
+    df["price_raw"] = df["price_raw"].apply(lambda x: x.replace("Â£", "£").replace("Ã‚Â£", "£").replace("Ã‚", ""))
+    
+    # Extract unit if possible
+    def get_unit(text):
+        if not text: return "đ"
+        match = re.search(r"([£\$€đ¥\u20ab]|VND|USD|GBP|EUR)", text, re.I)
+        return match.group(1) if match else "đ"
+    
+    df["unit"] = df["price_raw"].apply(get_unit)
 
     # Remove rows where price is suspiciously large (> 10B) or negative
     df = df[(df["price"] >= 0) & (df["price"] < 1e10)]

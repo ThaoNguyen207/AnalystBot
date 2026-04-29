@@ -2,15 +2,30 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, 
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime
 import os
+from dotenv import load_dotenv
+
+# Load env variables
+load_dotenv()
 
 # Project root = two levels up from this file (backend/models/database.py)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR     = os.environ.get("DATA_DIR", os.path.join(PROJECT_ROOT, "data"))
 os.makedirs(DATA_DIR, exist_ok=True)
 
-DATABASE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'analyst_bot.db')}"
+# Database Logic: PostgreSQL (Production) or SQLite (Local)
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+if DATABASE_URL:
+    # SQLAlchemy requires 'postgresql://' but many platforms (Render/Railway) provide 'postgres://'
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    
+    # Engine for PostgreSQL
+    engine = create_engine(DATABASE_URL)
+else:
+    # Fallback to SQLite for local development
+    DATABASE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'analyst_bot.db')}"
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

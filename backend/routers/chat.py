@@ -39,6 +39,17 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)):
     summary = generate_context_summary(df)
     data_context = ""
     
+    # If the dataset is small enough, let the AI see a distilled version
+    # Reduced to 100 to stay within Groq/LLM free tier token limits
+    if not df.empty:
+        limit = 100
+        mini_table = df[["name", "price"]].head(limit).to_dict('records')
+        data_context = f"DỮ LIỆU TÓM LƯỢC (100/{len(df)} mục): {json.dumps(mini_table, ensure_ascii=False)}"
+    
+    # If the response already has specific rows (priority), append them
+    if draft_response.get("data"):
+        data_context += f"\nDỮ LIỆU CHI TIẾT ƯU TIÊN: {json.dumps(draft_response['data'], ensure_ascii=False)}"
+    
     # Run targeted actions to get raw data for the LLM
     if action == "top_scorers":
         products = q.all()
@@ -78,11 +89,12 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)):
     # ── Final LLM Synthesis ────────────────────────────────────────────────
     system_prompt = (
         "Bạn là một Trợ lý Phân tích Dữ liệu Siêu Thông Minh. "
-        "Dựa trên dữ liệu khách hàng đã cào được sau đây:\n"
-        f"TÓM TẮT CHUNG: {summary}\n"
-        f"DỮ LIỆU CHI TIẾT CÂU HỎI: {data_context}\n\n"
-        "NHIỆM VỤ: Trả lời câu hỏi của khách hàng một cách tự nhiên, sâu sắc và chuyên nghiệp. "
-        "Đừng trả lời kiểu máy móc. Hãy như một người bạn am hiểu dữ liệu đang tư vấn."
+        "Dựa trên dữ liệu thực tế từ hệ thống sau đây:\n"
+        f"TỔNG QUAN BỘ DỮ LIỆU: {summary}\n"
+        f"CHI TIẾT DỮ LIỆU LIÊN QUAN: {data_context}\n\n"
+        "NHIỆM VỤ: Trả lời câu hỏi DỰA TRÊN DỮ LIỆU ĐƯỢC CUNG CẤP. "
+        "Nếu dữ liệu chi tiết có chứa tên sản phẩm/cầu thủ, hãy trích dẫn chính xác. "
+        "Nếu không tìm thấy trong dữ liệu, hãy báo cáo trung thực, đừng tự bịa ra thông tin."
     )
     
     provider = slots.get("provider", "auto")

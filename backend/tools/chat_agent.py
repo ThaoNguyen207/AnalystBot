@@ -133,49 +133,52 @@ class ChatAgent:
         if df is None or df.empty:
             return {"type": "general", "label": "bản ghi", "unit": ""}
         cols = [c.lower() for c in df.columns]
+        
         if any(x in cols for x in ["goals", "assists"]):
             return {"type": "football", "label": "cầu thủ", "unit": "điểm"}
-        return {"type": "general", "label": "bản ghi", "unit": ""}
+        
+        # Check for book-related terms
+        if any(x in cols for x in ["title", "author", "isbn", "pages"]):
+             return {"type": "books", "label": "cuốn sách", "unit": "cuốn"}
+             
+        # Check if most price_raw strings contain £, $, €
+        return {"type": "general", "label": "sản phẩm", "unit": "mục"}
 
     def extract_slots(self, text: str) -> Dict:
         slots = {"n": 5, "order": "desc", "category": "", "query": "", "provider": "auto"}
         t = text.lower()
         
-        # Provider detection (e.g., "Gemini -> phan tich")
+        # Provider detection
         if "gemini" in t: slots["provider"] = "gemini"
         elif "openai" in t: slots["provider"] = "openai"
-        elif "gpt" in t: slots["provider"] = "openai"
         elif "groq" in t: slots["provider"] = "groq"
 
         m = re.search(r"top\s*(\d+)", t)
         if m: slots["n"] = int(m.group(1))
         if any(k in t for k in ["rẻ", "thấp", "ít", "kém", "tệ"]): slots["order"] = "asc"
         
-        # Intelligent Entity Detection (Names/Teams)
-        known_entities = ["haaland", "salah", "son", "palmer", "watkins", "foden", "saka", "bowen", "man city", "chelsea", "liverpool", "arsenal"]
-        for entity in known_entities:
-            if entity in t:
-                slots["category"] = entity
-                break
-        
-        if not slots["category"]:
-            cat_m = re.search(r"(?:loại|nhóm|danh mục|vị trí|đội|về)\s+([a-zA-ZÀ-ỹ0-9\s]+)", t)
-            if cat_m: slots["category"] = cat_m.group(1).strip()
+        # Extract subject/category robustly
+        # Look for text between quotes or after common prepositions
+        subject_m = re.search(r"['\"]([^'\"]+)['\"]", t) # Text in quotes
+        if subject_m: 
+            slots["category"] = subject_m.group(1).strip()
+        else:
+            # Fallback: capture text after "của", "về", "cuốn", "sách", "tên là"
+            prep_m = re.search(r"(?:của|về|cuốn|sách|tên là|là)\s+([a-zA-ZÀ-ỹ0-9\s\-]{3,})", t)
+            if prep_m:
+                # Clean up: stop at "giá", "là", "nhiều"
+                clean_val = re.split(r"\s+(?:giá|là|nhiều|bao|trong)\b", prep_m.group(1))[0]
+                slots["category"] = clean_val.strip()
             
         return slots
 
     def respond(self, text: str, df: Optional[pd.DataFrame] = None, context: Dict = None) -> Dict:
-        """
-        Generate a response dict:
-          { intent, message, action, slots, data }
-        """
         intent, score = self.detect_intent(text)
         slots = self.extract_slots(text)
 
-        # Force SEARCH if a name is detected but intent is low confidence
-        if slots["category"] and (intent == "UNKNOWN" or score < 1):
+        # Fallback: If intent is weak but we have a candidate name/subject, force SEARCH
+        if slots["category"] and (intent == "UNKNOWN" or intent == "AVERAGE" or score < 1):
             intent = "SEARCH"
-            score = 1
 
         context = context or {}
 

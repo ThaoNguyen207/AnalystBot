@@ -294,6 +294,43 @@ function setDemo(url) {
   doCrawl();
 }
 
+// ── Upload ────────────────────────────────────────────────────────────────
+async function doUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  showLoading('📤 Đang tải lên và xử lý file...');
+  try {
+    const response = await fetch('/api/upload/file', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      currentSessionId = data.session_id;
+      toast(`✅ ${data.message}`, 'success');
+      
+      document.getElementById('currentSite').textContent = `— ${file.name}`;
+      document.getElementById('emptyState').style.display = 'none';
+
+      await refreshSessions();
+      await loadProducts();
+      await doAnalyze();
+    } else {
+      throw new Error(data.detail || 'Lỗi không xác định');
+    }
+  } catch (e) {
+    toast('❌ Lỗi tải file: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+    event.target.value = ''; // Reset input
+  }
+}
+
 // ── Analyze ───────────────────────────────────────────────────────────────
 async function doAnalyze() {
   const qs = currentSessionId ? `?session_id=${currentSessionId}` : '';

@@ -29,20 +29,25 @@ def analyze(df: pd.DataFrame, prev_df: Optional[pd.DataFrame] = None) -> Dict:
 # ─── Sub-functions ────────────────────────────────────────────────────────────
 
 def _get_unit(df: pd.DataFrame, priced: pd.DataFrame) -> str:
-    """Helper to detect currency symbol from the dataset."""
-    unit = "đ"
-    # 1. Check explicit unit column
+    """Helper to detect currency symbol with extra smarts for Premier League."""
+    # 1. Kiểm tra cột đơn vị rõ ràng
     if "unit" in df.columns and not df["unit"].dropna().empty:
         return str(df["unit"].mode().iloc[0])
     
-    # 2. Scan price_raw for symbols
+    # 2. Đặc cách cho Premier League (Dựa vào danh mục cầu thủ)
+    if not df.empty and "category" in df.columns:
+        cats_text = " ".join(df["category"].astype(str).unique()).lower()
+        if any(kw in cats_text for kw in ["midfielder", "forward", "goalkeeper", "defender"]):
+            return "£"
+
+    # 3. Quét ký hiệu trong giá thô
     if not priced.empty and "price_raw" in priced.columns:
-        raw_text = " ".join(priced["price_raw"].astype(str).unique()[:15])
+        raw_text = " ".join(priced["price_raw"].astype(str).unique()[:20])
         if "£" in raw_text or "Â£" in raw_text: return "£"
         if "$" in raw_text: return "$"
         if "€" in raw_text: return "€"
-        if "đ" in raw_text or "VND" in raw_text or "VNĐ" in raw_text: return "đ"
-    return unit
+        
+    return "đ"
 
 def _summary(df: pd.DataFrame, priced: pd.DataFrame) -> Dict:
     """Full statistical analysis + auto-generated insights."""

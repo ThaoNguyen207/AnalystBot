@@ -60,6 +60,10 @@
         <button class="btn btn-primary" id="crawlBtn" onclick="doCrawl()">
           🕷️ Crawl
         </button>
+        <button class="btn btn-ghost" onclick="document.getElementById('fileInput').click()">
+          📥 Tải lên
+        </button>
+        <input type="file" id="fileInput" hidden accept=".csv, .xlsx, .xls" onchange="doUpload(event)" />
         <button class="btn btn-secondary" onclick="doAnalyze()">📊 Analyze</button>
       </div>
     </div>

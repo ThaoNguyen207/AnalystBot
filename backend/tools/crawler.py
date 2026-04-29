@@ -220,11 +220,15 @@ class SmartCrawler:
 
         items = []
         for p in data.get("elements", []):
+            web_name = p.get("web_name", "")
+            full_name = f"{p.get('first_name','')} {p.get('second_name','')}".strip()
+            display_name = web_name if web_name else full_name
+            
             cost_m = round(p.get("now_cost", 0) / 10, 1)   # FPL stores price ×10
             team   = teams.get(p.get("team"), "Unknown")
             pos    = positions.get(p.get("element_type"), "Unknown")
             items.append({
-                "name":       f"{p.get('first_name','')} {p.get('second_name','')}".strip(),
+                "name":       display_name,
                 "price":      cost_m,
                 "price_raw":  f"£{cost_m}M",
                 "category":   pos,

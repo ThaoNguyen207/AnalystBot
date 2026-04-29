@@ -372,7 +372,7 @@ function renderInsights(insights) {
 // ── Table ─────────────────────────────────────────────────────────────────
 
 async function loadProducts() {
-  const qs = currentSessionId ? `?session_id=${currentSessionId}&limit=500` : '?limit=500';
+  const qs = currentSessionId ? `?session_id=${currentSessionId}&limit=2000` : '?limit=2000';
   try {
     const data = await apiGet('/api/data/products' + qs);
     allProducts = data.products || [];
